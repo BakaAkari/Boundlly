@@ -1,4 +1,4 @@
-# 太空FPS游戏
+# Boundlly
 
 基于Three.js开发的第一人称太空射击游戏。
 
