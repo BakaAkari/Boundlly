@@ -76,9 +76,9 @@ export class Gun {
     }
   }
 
-  shoot(asteroids) {
+  shoot(asteroids, otherPlayers = []) {
     if (this.ammo <= 0 || this.isReloading) {
-      return;
+      return null;
     }
     
     this.ammo--;
@@ -99,7 +99,33 @@ export class Gun {
     // 射线检测
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     
-    // 检测命中
+    let hitResult = null;
+    
+    // 先检测玩家（优先级更高）
+    if (otherPlayers && otherPlayers.length > 0) {
+      const playerMeshes = otherPlayers.map(p => p.group);
+      const playerIntersects = this.raycaster.intersectObjects(playerMeshes, true);
+      
+      if (playerIntersects.length > 0) {
+        const hit = playerIntersects[0];
+        // 找到被击中的玩家
+        const hitPlayer = otherPlayers.find(p => 
+          p.group === hit.object || p.group === hit.object.parent
+        );
+        
+        if (hitPlayer) {
+          this.createHitEffect(hit.point);
+          hitResult = {
+            type: 'player',
+            playerId: hitPlayer.id,
+            damage: 20
+          };
+          return hitResult;
+        }
+      }
+    }
+    
+    // 检测小行星命中
     const meshes = asteroids.map(a => a.mesh);
     const intersects = this.raycaster.intersectObjects(meshes);
     
@@ -130,6 +156,8 @@ export class Gun {
     if (this.ammo === 0 && this.totalAmmo > 0) {
       this.reload();
     }
+    
+    return hitResult;
   }
 
   showMuzzleFlash() {

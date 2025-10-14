@@ -7,6 +7,7 @@ export class InputManager {
       right: false,
       up: false,
       down: false,
+      boost: false,
       barrelRollLeft: false,
       barrelRollRight: false
     };
@@ -41,9 +42,12 @@ export class InputManager {
       case 'Space':
         this.keys.up = true;
         break;
+      case 'KeyC':
+        this.keys.down = true;
+        break;
       case 'ShiftLeft':
       case 'ShiftRight':
-        this.keys.down = true;
+        this.keys.boost = true;
         break;
       case 'KeyQ':
         this.keys.barrelRollLeft = true;
@@ -71,9 +75,12 @@ export class InputManager {
       case 'Space':
         this.keys.up = false;
         break;
+      case 'KeyC':
+        this.keys.down = false;
+        break;
       case 'ShiftLeft':
       case 'ShiftRight':
-        this.keys.down = false;
+        this.keys.boost = false;
         break;
       case 'KeyQ':
         this.keys.barrelRollLeft = false;

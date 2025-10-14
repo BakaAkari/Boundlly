@@ -1,199 +1,304 @@
 import * as THREE from 'three';
+import { io } from 'socket.io-client';
 
 export class MultiplayerManager {
   constructor(scene, localPlayer) {
     this.scene = scene;
     this.localPlayer = localPlayer;
-    this.otherPlayers = new Map(); // 存储其他玩家 { id: { mesh, lastUpdate } }
+    this.otherPlayers = new Map();
     this.socket = null;
-    this.playerId = null;
-    this.updateInterval = 50; // 50ms 发送一次位置更新
-    this.lastUpdateTime = 0;
+    this.connected = false;
     
-    this.connect();
+    // 获取服务器地址（使用当前域名）
+    const serverUrl = window.location.origin;
+    
+    this.connect(serverUrl);
   }
 
-  getWebSocketUrl() {
-    // 开发环境
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'ws://localhost:3001';
-    }
+  connect(serverUrl) {
+    console.log('连接服务器:', serverUrl);
     
-    // 生产环境 - 使用相同的主机名
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    
-    // 如果通过 NPM 反向代理，使用 /ws 路径
-    // 否则使用端口 3001
-    return `${protocol}//${host}/ws`;
-  }
-
-  connect() {
-    // 自动检测 WebSocket 服务器地址
-    const wsUrl = this.getWebSocketUrl();
-    
-    console.log('尝试连接到多人服务器:', wsUrl);
-    
-    try {
-      this.socket = new WebSocket(wsUrl);
-      
-      this.socket.onopen = () => {
-        console.log('已连接到多人服务器');
-      };
-      
-      this.socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        this.handleMessage(data);
-      };
-      
-      this.socket.onerror = (error) => {
-        console.log('多人服务器连接失败，将以单人模式运行');
-      };
-      
-      this.socket.onclose = () => {
-        console.log('与多人服务器断开连接');
-      };
-    } catch (error) {
-      console.log('无法连接到多人服务器，将以单人模式运行');
-    }
-  }
-
-  handleMessage(data) {
-    switch (data.type) {
-      case 'init':
-        // 服务器分配的玩家 ID
-        this.playerId = data.id;
-        console.log('玩家 ID:', this.playerId);
-        break;
-        
-      case 'playerJoined':
-        // 新玩家加入
-        console.log('玩家加入:', data.id);
-        this.createOtherPlayer(data.id);
-        break;
-        
-      case 'playerLeft':
-        // 玩家离开
-        console.log('玩家离开:', data.id);
-        this.removeOtherPlayer(data.id);
-        break;
-        
-      case 'playerUpdate':
-        // 更新其他玩家位置
-        this.updateOtherPlayer(data.id, data.position, data.rotation);
-        break;
-        
-      case 'players':
-        // 当前所有玩家列表
-        data.players.forEach(player => {
-          if (player.id !== this.playerId && !this.otherPlayers.has(player.id)) {
-            this.createOtherPlayer(player.id);
-            this.updateOtherPlayer(player.id, player.position, player.rotation);
-          }
-        });
-        break;
-    }
-  }
-
-  createOtherPlayer(id) {
-    // 创建简单的几何体代表其他玩家
-    const geometry = new THREE.BoxGeometry(2, 2, 3);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x00ff00,
-      emissive: 0x004400
+    this.socket = io(serverUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    
-    // 添加一个方向指示器
-    const arrowGeometry = new THREE.ConeGeometry(0.5, 2, 8);
-    const arrowMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffff00,
-      emissive: 0x444400
+
+    this.socket.on('connect', () => {
+      console.log('已连接到服务器');
+      this.connected = true;
+      this.updatePlayerCount();
     });
-    const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
-    arrow.rotation.x = Math.PI / 2;
-    arrow.position.z = -2;
-    mesh.add(arrow);
-    
-    this.scene.add(mesh);
-    this.otherPlayers.set(id, {
-      mesh: mesh,
-      targetPosition: new THREE.Vector3(),
-      targetRotation: new THREE.Euler()
+
+    this.socket.on('disconnect', () => {
+      console.log('与服务器断开连接');
+      this.connected = false;
+      this.updatePlayerCount();
+    });
+
+    // 接收当前所有玩家
+    this.socket.on('currentPlayers', (players) => {
+      console.log('当前玩家:', players.length);
+      players.forEach(player => {
+        if (player.id !== this.socket.id) {
+          this.addOtherPlayer(player);
+        }
+      });
+      this.updatePlayerCount();
+    });
+
+    // 新玩家加入
+    this.socket.on('newPlayer', (player) => {
+      console.log('新玩家加入:', player.id);
+      this.addOtherPlayer(player);
+      this.updatePlayerCount();
+    });
+
+    // 玩家移动
+    this.socket.on('playerMoved', (data) => {
+      this.updateOtherPlayer(data);
+    });
+
+    // 玩家射击
+    this.socket.on('playerShot', (data) => {
+      this.showOtherPlayerShot(data);
+    });
+
+    // 玩家受到伤害
+    this.socket.on('playerDamaged', (data) => {
+      if (data.victimId === this.socket.id) {
+        // 本地玩家受伤
+        this.localPlayer.takeDamage(data.damage, data.attackerId);
+      }
+    });
+
+    // 玩家断开
+    this.socket.on('playerDisconnected', (playerId) => {
+      console.log('玩家离开:', playerId);
+      this.removeOtherPlayer(playerId);
+      this.updatePlayerCount();
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('连接错误:', error);
     });
   }
 
-  removeOtherPlayer(id) {
-    const player = this.otherPlayers.get(id);
-    if (player) {
-      this.scene.remove(player.mesh);
-      this.otherPlayers.delete(id);
-    }
-  }
-
-  updateOtherPlayer(id, position, rotation) {
-    if (id === this.playerId) return;
-    
-    let player = this.otherPlayers.get(id);
-    if (!player) {
-      this.createOtherPlayer(id);
-      player = this.otherPlayers.get(id);
-    }
-    
-    if (player && position && rotation) {
-      // 设置目标位置和旋转，用于平滑插值
-      player.targetPosition.set(position.x, position.y, position.z);
-      player.targetRotation.set(rotation.x, rotation.y, rotation.z);
-    }
-  }
-
-  sendUpdate() {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+  addOtherPlayer(playerData) {
+    if (this.otherPlayers.has(playerData.id)) {
       return;
     }
+
+    // 创建其他玩家的视觉模型（一个简单的立方体 + 方向指示器）
+    const group = new THREE.Group();
     
-    // 发送本地玩家位置和旋转
-    const position = this.localPlayer.camera.position;
-    const rotation = this.localPlayer.camera.rotation;
+    // 玩家身体（立方体）
+    const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 1);
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: this.getRandomPlayerColor(),
+      metalness: 0.3,
+      roughness: 0.7
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    group.add(body);
     
-    const data = {
-      type: 'update',
-      position: {
-        x: position.x,
-        y: position.y,
-        z: position.z
-      },
-      rotation: {
-        x: rotation.x,
-        y: rotation.y,
-        z: rotation.z
+    // 前方指示器（小锥体）
+    const coneGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
+    const coneMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffff00,
+      emissive: 0xffff00,
+      emissiveIntensity: 0.5
+    });
+    const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+    cone.rotation.x = Math.PI / 2;
+    cone.position.z = -1;
+    group.add(cone);
+    
+    // 添加玩家标签（发光点）
+    const labelGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const labelMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00
+    });
+    const label = new THREE.Mesh(labelGeometry, labelMaterial);
+    label.position.y = 1.5;
+    group.add(label);
+    
+    // 设置位置
+    if (playerData.position) {
+      group.position.copy(playerData.position);
+    }
+    
+    // 只使用Y轴旋转来显示玩家朝向
+    if (playerData.rotation) {
+      group.rotation.set(0, playerData.rotation.y, 0);
+    }
+    
+    this.scene.add(group);
+    
+    this.otherPlayers.set(playerData.id, {
+      group: group,
+      targetPosition: new THREE.Vector3(),
+      targetRotation: new THREE.Euler(),
+      targetRoll: 0
+    });
+  }
+
+  updateOtherPlayer(data) {
+    const player = this.otherPlayers.get(data.id);
+    if (player) {
+      // 平滑插值到目标位置
+      player.targetPosition.copy(data.position);
+      // 只使用Y轴旋转（左右转向）来显示玩家朝向
+      player.targetRotation.set(0, data.rotation.y, 0);
+      // 保存滚转角度
+      if (data.cameraRoll !== undefined) {
+        player.targetRoll = data.cameraRoll;
+      }
+    }
+  }
+
+  removeOtherPlayer(playerId) {
+    const player = this.otherPlayers.get(playerId);
+    if (player) {
+      this.scene.remove(player.group);
+      this.otherPlayers.delete(playerId);
+    }
+  }
+
+  sendPlayerUpdate(position, rotation, cameraRoll = 0) {
+    if (this.socket && this.connected) {
+      this.socket.emit('playerMove', {
+        position: {
+          x: position.x,
+          y: position.y,
+          z: position.z
+        },
+        rotation: {
+          x: rotation.x,
+          y: rotation.y,
+          z: rotation.z
+        },
+        cameraRoll: cameraRoll
+      });
+    }
+  }
+
+  sendPlayerShoot(position, direction) {
+    if (this.socket && this.connected) {
+      this.socket.emit('playerShoot', {
+        position: {
+          x: position.x,
+          y: position.y,
+          z: position.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        }
+      });
+    }
+  }
+
+  sendPlayerDamage(victimId, damage) {
+    if (this.socket && this.connected) {
+      this.socket.emit('playerDamage', {
+        victimId: victimId,
+        damage: damage
+      });
+    }
+  }
+
+  getOtherPlayersList() {
+    return Array.from(this.otherPlayers.entries()).map(([id, data]) => ({
+      id: id,
+      group: data.group
+    }));
+  }
+
+  showOtherPlayerShot(data) {
+    // 创建简单的射击特效
+    const flashGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffaa00,
+      transparent: true,
+      opacity: 1
+    });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(data.position);
+    this.scene.add(flash);
+    
+    // 淡出并移除
+    const fadeOut = () => {
+      flashMaterial.opacity -= 0.05;
+      if (flashMaterial.opacity <= 0) {
+        this.scene.remove(flash);
+        flashGeometry.dispose();
+        flashMaterial.dispose();
+      } else {
+        requestAnimationFrame(fadeOut);
       }
     };
-    
-    this.socket.send(JSON.stringify(data));
+    fadeOut();
   }
 
   update(delta) {
-    // 定期发送位置更新
-    const currentTime = performance.now();
-    if (currentTime - this.lastUpdateTime > this.updateInterval) {
-      this.sendUpdate();
-      this.lastUpdateTime = currentTime;
-    }
-    
-    // 平滑移动其他玩家
-    this.otherPlayers.forEach(player => {
-      // 使用插值使移动更平滑
-      player.mesh.position.lerp(player.targetPosition, 0.2);
-      player.mesh.rotation.x = THREE.MathUtils.lerp(player.mesh.rotation.x, player.targetRotation.x, 0.2);
-      player.mesh.rotation.y = THREE.MathUtils.lerp(player.mesh.rotation.y, player.targetRotation.y, 0.2);
-      player.mesh.rotation.z = THREE.MathUtils.lerp(player.mesh.rotation.z, player.targetRotation.z, 0.2);
+    // 平滑更新其他玩家位置
+    this.otherPlayers.forEach((player) => {
+      // 位置插值
+      player.group.position.lerp(player.targetPosition, 0.2);
+      
+      // Y轴旋转（左右转向）
+      player.group.rotation.y += (player.targetRotation.y - player.group.rotation.y) * 0.2;
+      player.group.rotation.x = 0;
+      
+      // Z轴滚转（太空中的桶滚效果）
+      if (player.targetRoll !== undefined) {
+        player.group.rotation.z = player.targetRoll;
+      } else {
+        player.group.rotation.z = 0;
+      }
     });
+    
+    // 每秒发送20次位置更新
+    if (!this.lastUpdate || Date.now() - this.lastUpdate > 50) {
+      if (this.localPlayer && this.localPlayer.camera) {
+        this.sendPlayerUpdate(
+          this.localPlayer.camera.position,
+          this.localPlayer.camera.rotation,
+          this.localPlayer.cameraRoll || 0
+        );
+      }
+      this.lastUpdate = Date.now();
+    }
+  }
+
+  getRandomPlayerColor() {
+    const colors = [
+      0xff6b6b, // 红
+      0x4ecdc4, // 青
+      0xffe66d, // 黄
+      0x95e1d3, // 绿
+      0xf38181, // 粉
+      0xaa96da, // 紫
+      0xfcbad3, // 粉红
+      0xa8e6cf  // 薄荷绿
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  updatePlayerCount() {
+    const playerCount = this.otherPlayers.size + (this.connected ? 1 : 0);
+    const element = document.getElementById('player-count');
+    if (element) {
+      element.textContent = `在线玩家: ${playerCount}`;
+    }
   }
 
   disconnect() {
     if (this.socket) {
-      this.socket.close();
+      this.socket.disconnect();
     }
   }
 }

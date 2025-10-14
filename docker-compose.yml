@@ -2,16 +2,12 @@ services:
   boundary-game:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: Dockerfile
     image: boundary-game:latest
     container_name: boundary-game
     ports:
-      - "8880:8080"  # 静态文件服务器
-      - "3001:3001"  # WebSocket 服务器
+      - "3213:3000"  # Node.js服务器 (HTTP + WebSocket)
     restart: unless-stopped
-    environment:
-      - WS_PORT=3001
-      - NODE_ENV=production
     networks:
       - boundary-network
     # Unraid 推荐配置

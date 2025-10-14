@@ -48,7 +48,7 @@ class Game {
     // 创建武器
     this.gun = new Gun(this.sceneManager.camera, this.sceneManager.scene);
     
-    // 创建多人管理器
+    // 创建多人游戏管理器
     this.multiplayerManager = new MultiplayerManager(
       this.sceneManager.scene,
       this.player
@@ -92,8 +92,25 @@ class Game {
 
   setupShooting() {
     document.addEventListener('click', () => {
-      if (this.isPlaying) {
-        this.gun.shoot(this.asteroidGenerator.asteroids);
+      if (this.isPlaying && this.player.healthSystem.isAlive()) {
+        // 获取其他玩家列表
+        const otherPlayers = this.multiplayerManager.getOtherPlayersList();
+        
+        // 射击
+        const hitResult = this.gun.shoot(this.asteroidGenerator.asteroids, otherPlayers);
+        
+        // 通知其他玩家射击
+        const direction = new THREE.Vector3();
+        this.sceneManager.camera.getWorldDirection(direction);
+        this.multiplayerManager.sendPlayerShoot(
+          this.sceneManager.camera.position,
+          direction
+        );
+        
+        // 如果击中了玩家，发送伤害事件
+        if (hitResult && hitResult.type === 'player') {
+          this.multiplayerManager.sendPlayerDamage(hitResult.playerId, hitResult.damage);
+        }
       }
     });
   }
@@ -128,7 +145,7 @@ class Game {
       // 更新武器
       this.gun.update(delta, time);
       
-      // 更新多人
+      // 更新多人游戏
       this.multiplayerManager.update(delta);
       
       // 更新FPS
