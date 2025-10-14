@@ -26,7 +26,6 @@ git push -u origin main
 ```
 
 **确保已提交的文件包括**：
-- `wrangler.toml` - Cloudflare配置文件
 - `package.json` - 依赖配置
 - `vite.config.js` - 构建配置
 - `src/` - 源代码
@@ -54,12 +53,11 @@ git push -u origin main
    框架预设: Vite
    构建命令: npm run build
    构建输出目录: dist
-   根目录: / (留空)
+   根目录: (留空)
    ```
    
-   **重要**：确保以下设置：
-   - ❌ **不要填写** "Deploy command"（部署命令留空）
-   - ✅ 只需要构建命令和输出目录
+   **如果有"Build system version"选项**：
+   - 选择 "Version 1 (Legacy)" 或 "Version 2"（推荐）
 
 5. **开始部署**
    - 点击 "Save and Deploy"
@@ -105,14 +103,18 @@ git push
 ### Q: 部署失败怎么办？
 
 **错误：Missing entry-point to Worker script**
-- 原因：错误配置了部署命令
-- 解决：
+- 原因：Cloudflare Pages配置问题
+- 解决方案：
   1. 进入项目 Settings > Builds & deployments
-  2. 确保 "Deploy command" 为空
-  3. 只保留：
+  2. 点击 "Edit configuration"
+  3. 配置如下：
+     - Framework preset: `Vite`
      - Build command: `npm run build`
      - Build output directory: `dist`
-  4. 点击 "Save" 后重新部署
+     - Root directory: (留空)
+  4. 如果有"Build system version"，选择 `Version 2`
+  5. 点击 "Save"
+  6. 返回 Deployments 页面，点击 "Retry deployment"
 
 **检查构建日志**：
 - 进入项目 > 点击失败的部署 > 查看构建日志

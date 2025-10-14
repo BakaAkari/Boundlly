@@ -1,7 +1,0 @@
-[env.production]
-name = "boundary-fps"
-compatibility_date = "2025-10-14"
-
-[env.production.assets]
-directory = "./dist"
-
