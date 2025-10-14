@@ -28,6 +28,7 @@ git push -u origin main
 **确保已提交的文件包括**：
 - `package.json` - 依赖配置
 - `vite.config.js` - 构建配置
+- `wrangler.jsonc` - Cloudflare配置文件
 - `src/` - 源代码
 - `index.html` - 入口页面
 
@@ -103,18 +104,22 @@ git push
 ### Q: 部署失败怎么办？
 
 **错误：Missing entry-point to Worker script**
-- 原因：Cloudflare Pages配置问题
+- 原因：缺少Cloudflare配置文件
 - 解决方案：
-  1. 进入项目 Settings > Builds & deployments
-  2. 点击 "Edit configuration"
-  3. 配置如下：
-     - Framework preset: `Vite`
-     - Build command: `npm run build`
-     - Build output directory: `dist`
-     - Root directory: (留空)
-  4. 如果有"Build system version"，选择 `Version 2`
-  5. 点击 "Save"
-  6. 返回 Deployments 页面，点击 "Retry deployment"
+
+**步骤1：提交配置文件到GitHub**
+```bash
+git add wrangler.jsonc
+git commit -m "添加Cloudflare配置文件"
+git push
+```
+
+**步骤2：重新部署**
+- Cloudflare会自动检测到新提交并重新部署
+- 或者在Cloudflare Pages控制台点击 "Retry deployment"
+
+**配置说明**：
+`wrangler.jsonc`文件告诉Cloudflare Pages如何部署你的静态资源。有了这个文件后，部署命令`npx wrangler deploy`就能正确工作了。
 
 **检查构建日志**：
 - 进入项目 > 点击失败的部署 > 查看构建日志
