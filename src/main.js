@@ -5,6 +5,7 @@ import { InputManager } from './player/InputManager.js';
 import { AsteroidGenerator } from './asteroid/AsteroidGenerator.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
 import { Gun } from './weapon/Gun.js';
+import { MultiplayerManager } from './multiplayer/MultiplayerManager.js';
 
 class Game {
   constructor() {
@@ -46,6 +47,12 @@ class Game {
     
     // 创建武器
     this.gun = new Gun(this.sceneManager.camera, this.sceneManager.scene);
+    
+    // 创建多人管理器
+    this.multiplayerManager = new MultiplayerManager(
+      this.sceneManager.scene,
+      this.player
+    );
     
     // 设置指针锁定
     this.setupPointerLock();
@@ -120,6 +127,9 @@ class Game {
       
       // 更新武器
       this.gun.update(delta, time);
+      
+      // 更新多人
+      this.multiplayerManager.update(delta);
       
       // 更新FPS
       this.updateFPS();

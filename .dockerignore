@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+*.md
+!server/DEPLOY.md
+!server/README.md
+server/node_modules
+.vscode
+.idea
+*.log
+

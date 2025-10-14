@@ -6,7 +6,9 @@ export class InputManager {
       left: false,
       right: false,
       up: false,
-      down: false
+      down: false,
+      barrelRollLeft: false,
+      barrelRollRight: false
     };
 
     this.setupKeyboardEvents();
@@ -43,6 +45,12 @@ export class InputManager {
       case 'ShiftRight':
         this.keys.down = true;
         break;
+      case 'KeyQ':
+        this.keys.barrelRollLeft = true;
+        break;
+      case 'KeyE':
+        this.keys.barrelRollRight = true;
+        break;
     }
   }
 
@@ -66,6 +74,12 @@ export class InputManager {
       case 'ShiftLeft':
       case 'ShiftRight':
         this.keys.down = false;
+        break;
+      case 'KeyQ':
+        this.keys.barrelRollLeft = false;
+        break;
+      case 'KeyE':
+        this.keys.barrelRollRight = false;
         break;
     }
   }

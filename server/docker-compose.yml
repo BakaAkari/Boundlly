@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  boundary-game:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    container_name: boundary-multiplayer
+    ports:
+      - "8880:8080"   # 静态文件服务
+      - "3001:3001"   # WebSocket 服务器
+    environment:
+      - WS_PORT=3001
+    restart: unless-stopped
+    networks:
+      - boundary-network
+
+networks:
+  boundary-network:
+    driver: bridge
+

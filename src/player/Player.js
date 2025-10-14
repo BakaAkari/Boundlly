@@ -14,6 +14,15 @@ export class Player {
     this.speed = 20.0;
     this.damping = 0.9;
     
+    // 桶滚状态
+    this.barrelRoll = {
+      active: false,
+      direction: 0, // -1 为左，1 为右
+      progress: 0,
+      duration: 0.8, // 桶滚持续时间（秒）
+      totalRotation: Math.PI * 2 // 360度
+    };
+    
     this.createControls();
     this.createPhysicsBody();
   }
@@ -39,8 +48,50 @@ export class Player {
   }
 
   update(delta) {
+    // 检查是否触发新的桶滚
+    if (!this.barrelRoll.active) {
+      if (this.inputManager.keys.barrelRollLeft) {
+        this.barrelRoll.active = true;
+        this.barrelRoll.direction = -1; // 左滚
+        this.barrelRoll.progress = 0;
+        this.inputManager.keys.barrelRollLeft = false;
+      } else if (this.inputManager.keys.barrelRollRight) {
+        this.barrelRoll.active = true;
+        this.barrelRoll.direction = 1; // 右滚
+        this.barrelRoll.progress = 0;
+        this.inputManager.keys.barrelRollRight = false;
+      }
+    }
+    
+    // 更新桶滚动画
+    if (this.barrelRoll.active) {
+      this.barrelRoll.progress += delta / this.barrelRoll.duration;
+      
+      if (this.barrelRoll.progress >= 1.0) {
+        // 桶滚完成
+        this.barrelRoll.active = false;
+        this.barrelRoll.progress = 0;
+      }
+    }
+    
     // 获取相机方向
     this.camera.getWorldDirection(this.direction);
+    
+    // 应用桶滚旋转
+    if (this.barrelRoll.active) {
+      const rollAngle = this.barrelRoll.direction * this.barrelRoll.totalRotation * this.barrelRoll.progress;
+      
+      // 创建旋转矩阵，沿着前进方向（Z轴）旋转
+      const rotationMatrix = new THREE.Matrix4();
+      rotationMatrix.makeRotationAxis(this.direction, rollAngle);
+      
+      // 应用旋转到相机
+      this.camera.up.set(0, 1, 0);
+      this.camera.up.applyMatrix4(rotationMatrix);
+    } else {
+      // 重置相机up向量
+      this.camera.up.set(0, 1, 0);
+    }
     
     // 计算右向量
     const right = new THREE.Vector3();
