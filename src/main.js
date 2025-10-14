@@ -35,7 +35,8 @@ class Game {
     this.player = new Player(
       this.sceneManager.camera,
       this.inputManager,
-      this.physicsWorld
+      this.physicsWorld,
+      this.sceneManager.scene
     );
     
     // 创建碎石
@@ -60,6 +61,9 @@ class Game {
     // 设置射击
     this.setupShooting();
     
+    // 设置ESC和设置菜单
+    this.setupSettings();
+    
     // 开始渲染循环
     this.animate();
     
@@ -78,15 +82,69 @@ class Game {
       this.blocker.style.display = 'none';
       this.crosshair.style.display = 'block';
       this.ui.style.display = 'block';
+      document.getElementById('settings-hint').style.display = 'block';
       this.isPlaying = true;
     });
 
     this.player.controls.addEventListener('unlock', () => {
+      // 检查是否是因为打开设置菜单而解锁
+      const settingsMenu = document.getElementById('settings-menu');
+      if (settingsMenu.style.display === 'block') {
+        return; // 如果是设置菜单，不显示blocker
+      }
+      
       this.blocker.style.display = 'flex';
       this.instructions.style.display = 'block';
       this.crosshair.style.display = 'none';
       this.ui.style.display = 'none';
+      document.getElementById('settings-hint').style.display = 'none';
       this.isPlaying = false;
+    });
+  }
+
+  setupSettings() {
+    const settingsMenu = document.getElementById('settings-menu');
+    const playerIdInput = document.getElementById('player-id-input');
+    const saveButton = document.getElementById('save-settings');
+    
+    // 加载已保存的ID
+    playerIdInput.value = localStorage.getItem('playerID') || '';
+    
+    // ESC键处理
+    document.addEventListener('keydown', (event) => {
+      if (event.code === 'Escape') {
+        if (settingsMenu.style.display === 'block') {
+          // 关闭设置菜单
+          settingsMenu.style.display = 'none';
+          this.player.controls.lock();
+        } else if (this.isPlaying) {
+          // 打开设置菜单
+          settingsMenu.style.display = 'block';
+          this.player.controls.unlock();
+        }
+      }
+    });
+    
+    // 保存按钮
+    saveButton.addEventListener('click', () => {
+      const newId = playerIdInput.value.trim() || '玩家';
+      this.player.updatePlayerLabel(newId);
+      
+      // 通知服务器ID变更
+      if (this.multiplayerManager) {
+        this.multiplayerManager.updatePlayerId(newId);
+      }
+      
+      // 关闭菜单并恢复游戏
+      settingsMenu.style.display = 'none';
+      this.player.controls.lock();
+    });
+    
+    // 输入框回车保存
+    playerIdInput.addEventListener('keydown', (event) => {
+      if (event.code === 'Enter') {
+        saveButton.click();
+      }
     });
   }
 

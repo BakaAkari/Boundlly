@@ -36,7 +36,8 @@ io.on('connection', (socket) => {
     id: socket.id,
     position: { x: 0, y: 0, z: 10 },
     rotation: { x: 0, y: 0, z: 0 },
-    cameraRoll: 0
+    cameraRoll: 0,
+    playerId: '玩家'
   };
   
   players.set(socket.id, newPlayer);
@@ -82,6 +83,20 @@ io.on('connection', (socket) => {
       victimId: data.victimId,
       damage: data.damage
     });
+  });
+
+  // 接收玩家ID更新
+  socket.on('updatePlayerId', (data) => {
+    const player = players.get(socket.id);
+    if (player) {
+      player.playerId = data.playerId;
+      
+      // 广播给其他玩家
+      socket.broadcast.emit('playerIdUpdated', {
+        playerId: socket.id,
+        newId: data.playerId
+      });
+    }
   });
   
   // 玩家断开连接

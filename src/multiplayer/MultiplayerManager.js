@@ -29,6 +29,11 @@ export class MultiplayerManager {
       console.log('已连接到服务器');
       this.connected = true;
       this.updatePlayerCount();
+      
+      // 发送本地玩家ID
+      if (this.localPlayer && this.localPlayer.playerId) {
+        this.updatePlayerId(this.localPlayer.playerId);
+      }
     });
 
     this.socket.on('disconnect', () => {
@@ -80,6 +85,22 @@ export class MultiplayerManager {
       this.updatePlayerCount();
     });
 
+    // 玩家ID更新
+    this.socket.on('playerIdUpdated', (data) => {
+      const player = this.otherPlayers.get(data.playerId);
+      if (player) {
+        // 找到ID标签精灵并更新
+        const labelSprite = player.group.children.find(child => child.isSprite);
+        if (labelSprite && labelSprite.userData.labelTexture) {
+          const canvas = labelSprite.userData.labelTexture.image;
+          const ctx = canvas.getContext('2d');
+          this.drawPlayerLabel(ctx, canvas, data.newId);
+          labelSprite.userData.labelTexture.needsUpdate = true;
+          labelSprite.userData.playerId = data.newId;
+        }
+      }
+    });
+
     this.socket.on('connect_error', (error) => {
       console.error('连接错误:', error);
     });
@@ -92,6 +113,9 @@ export class MultiplayerManager {
 
     // 创建其他玩家的视觉模型（一个简单的立方体 + 方向指示器）
     const group = new THREE.Group();
+    
+    // 添加玩家ID标签
+    this.createOtherPlayerLabel(group, playerData.playerId || '玩家');
     
     // 玩家身体（立方体）
     const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 1);
@@ -267,10 +291,69 @@ export class MultiplayerManager {
         this.sendPlayerUpdate(
           this.localPlayer.camera.position,
           this.localPlayer.camera.rotation,
-          this.localPlayer.cameraRoll || 0
+          this.localPlayer.getRollAngle ? this.localPlayer.getRollAngle() : 0
         );
       }
       this.lastUpdate = Date.now();
+    }
+  }
+
+  createOtherPlayerLabel(group, playerId) {
+    // 创建canvas用于文本渲染
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    
+    // 绘制ID标签
+    this.drawPlayerLabel(ctx, canvas, playerId);
+    
+    // 创建纹理和材质
+    const labelTexture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: labelTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    
+    // 创建精灵
+    const labelSprite = new THREE.Sprite(spriteMaterial);
+    labelSprite.scale.set(2, 0.5, 1);
+    labelSprite.position.set(0, 2, 0); // 头顶上方
+    labelSprite.userData.labelTexture = labelTexture;
+    labelSprite.userData.playerId = playerId;
+    
+    // 添加到组
+    group.add(labelSprite);
+  }
+
+  drawPlayerLabel(ctx, canvas, playerId) {
+    // 清空画布
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 绘制背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.roundRect(10, 20, canvas.width - 20, 88, 20);
+    ctx.fill();
+    
+    // 绘制边框
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 4;
+    ctx.roundRect(10, 20, canvas.width - 20, 88, 20);
+    ctx.stroke();
+    
+    // 绘制文字
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(playerId, canvas.width / 2, 64);
+  }
+
+  updatePlayerId(newId) {
+    if (this.socket && this.connected) {
+      this.socket.emit('updatePlayerId', { playerId: newId });
     }
   }
 

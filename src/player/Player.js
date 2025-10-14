@@ -4,10 +4,11 @@ import * as CANNON from 'cannon-es';
 import { HealthSystem } from './HealthSystem.js';
 
 export class Player {
-  constructor(camera, inputManager, physicsWorld) {
+  constructor(camera, inputManager, physicsWorld, scene) {
     this.camera = camera;
     this.inputManager = inputManager;
     this.physicsWorld = physicsWorld;
+    this.scene = scene;
     
     // 健康系统（传递重生回调）
     this.healthSystem = new HealthSystem(() => this.respawn());
@@ -19,21 +20,102 @@ export class Player {
     this.boostMultiplier = 2.0; // 加速倍数
     this.damping = 0.9;
     
+    // 角色重心参数
+    this.centerOffset = 0.45; // 重心在摄像机下方0.45米（45cm）
+    
     // 桶滚状态
     this.barrelRoll = {
       active: false,
       direction: 0, // -1 为左，1 为右
-      radius: 4.0, // 旋转半径（米）- 摄像机下方400cm
       rotationSpeed: Math.PI, // 旋转速度（弧度/秒）- 每秒180度
-      currentAngle: 0, // 当前旋转角度
-      centerPoint: new THREE.Vector3() // 旋转中心点
     };
     
-    // 相机滚转角度（太空中没有上下概念）
-    this.cameraRoll = 0;
+    // 创建角色根节点（重心）
+    this.createCharacterRoot();
     
     this.createControls();
     this.createPhysicsBody();
+  }
+
+  createCharacterRoot() {
+    // 创建角色根节点（重心/胶囊体中心）
+    this.characterRoot = new THREE.Group();
+    this.characterRoot.position.set(0, 0, 10);
+    this.scene.add(this.characterRoot);
+    
+    // 摄像机作为子对象，相对于重心向上偏移
+    this.characterRoot.add(this.camera);
+    this.camera.position.set(0, this.centerOffset, 0);
+    
+    // 创建玩家ID标签
+    this.createPlayerLabel();
+  }
+
+  createPlayerLabel() {
+    // 从localStorage读取玩家ID
+    this.playerId = localStorage.getItem('playerID') || '玩家';
+    
+    // 创建canvas用于文本渲染
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    
+    // 绘制ID标签
+    this.updateLabelCanvas(ctx, canvas);
+    
+    // 创建纹理和材质
+    this.labelTexture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: this.labelTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    
+    // 创建精灵
+    this.labelSprite = new THREE.Sprite(spriteMaterial);
+    this.labelSprite.scale.set(2, 0.5, 1);
+    this.labelSprite.position.set(0, this.centerOffset + 1.2, 0); // 头顶上方1.2米
+    
+    // 添加到角色根节点
+    this.characterRoot.add(this.labelSprite);
+  }
+
+  updateLabelCanvas(ctx, canvas) {
+    // 清空画布
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 绘制背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.roundRect(10, 20, canvas.width - 20, 88, 20);
+    ctx.fill();
+    
+    // 绘制边框
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 4;
+    ctx.roundRect(10, 20, canvas.width - 20, 88, 20);
+    ctx.stroke();
+    
+    // 绘制文字
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.playerId, canvas.width / 2, 64);
+  }
+
+  updatePlayerLabel(newId) {
+    this.playerId = newId;
+    localStorage.setItem('playerID', newId);
+    
+    // 更新canvas
+    if (this.labelTexture) {
+      const canvas = this.labelTexture.image;
+      const ctx = canvas.getContext('2d');
+      this.updateLabelCanvas(ctx, canvas);
+      this.labelTexture.needsUpdate = true;
+    }
   }
 
   createControls() {
@@ -41,7 +123,7 @@ export class Player {
   }
 
   createPhysicsBody() {
-    // 创建球形刚体
+    // 创建胶囊体物理刚体（使用球体代替）
     const radius = 1;
     const shape = new CANNON.Sphere(radius);
     this.body = new CANNON.Body({
@@ -52,12 +134,13 @@ export class Player {
       angularDamping: 0.9
     });
     
+    // 物理刚体位置对应角色重心
     this.body.position.set(0, 0, 10);
     this.physicsWorld.world.addBody(this.body);
   }
 
   update(delta) {
-    // 检查是否激活桶滚
+    // 检查桶滚输入
     const pressingLeft = this.inputManager.keys.barrelRollLeft;
     const pressingRight = this.inputManager.keys.barrelRollRight;
     
@@ -65,58 +148,32 @@ export class Player {
       // 开始桶滚
       this.barrelRoll.active = true;
       this.barrelRoll.direction = pressingLeft ? -1 : 1;
-      
-      // 计算旋转中心点（当前位置下方4米）
-      this.barrelRoll.centerPoint.copy(this.camera.position);
-      this.barrelRoll.centerPoint.y -= this.barrelRoll.radius;
-      
-      // 计算初始角度（相对于中心点）
-      const offset = new THREE.Vector3().subVectors(this.camera.position, this.barrelRoll.centerPoint);
-      this.barrelRoll.currentAngle = Math.atan2(offset.x, offset.z);
-      
     } else if (!pressingLeft && !pressingRight && this.barrelRoll.active) {
       // 停止桶滚
       this.barrelRoll.active = false;
     }
     
-    // 更新桶滚运动
+    // 桶滚旋转（直接旋转characterRoot）
     if (this.barrelRoll.active) {
-      // 累积相机滚转角度
-      this.cameraRoll += this.barrelRoll.direction * this.barrelRoll.rotationSpeed * delta;
+      // 获取角色前进方向（世界坐标）
+      const forward = new THREE.Vector3();
+      this.characterRoot.getWorldDirection(forward);
       
-      // 更新角度
-      this.barrelRoll.currentAngle += this.barrelRoll.direction * this.barrelRoll.rotationSpeed * delta;
-      
-      // 获取相机当前方向（用于计算旋转平面）
-      this.camera.getWorldDirection(this.direction);
-      
-      // 计算右向量（用于确定旋转平面）
-      const right = new THREE.Vector3();
-      right.crossVectors(new THREE.Vector3(0, 1, 0), this.direction).normalize();
-      
-      // 在右-上平面上计算新位置
-      const newPosition = new THREE.Vector3();
-      newPosition.x = this.barrelRoll.centerPoint.x + Math.sin(this.barrelRoll.currentAngle) * this.barrelRoll.radius * right.x;
-      newPosition.y = this.barrelRoll.centerPoint.y + Math.cos(this.barrelRoll.currentAngle) * this.barrelRoll.radius;
-      newPosition.z = this.barrelRoll.centerPoint.z + Math.sin(this.barrelRoll.currentAngle) * this.barrelRoll.radius * right.z;
-      
-      // 更新物理刚体位置
-      this.body.position.set(newPosition.x, newPosition.y, newPosition.z);
-      this.body.velocity.set(0, 0, 0); // 清除速度，由桶滚控制位置
+      // 沿着前进方向旋转
+      const rotationDelta = this.barrelRoll.direction * this.barrelRoll.rotationSpeed * delta;
+      this.characterRoot.rotateOnAxis(forward, rotationDelta);
     }
     
-    // 常规移动（非桶滚状态）
+    // 常规移动
     if (!this.barrelRoll.active) {
-      // 获取相机方向
+      // 获取角色朝向（基于相机水平旋转）
       this.camera.getWorldDirection(this.direction);
       
-      // 根据滚转角度计算当前的上向量
-      const rotationMatrix = new THREE.Matrix4();
-      rotationMatrix.makeRotationAxis(this.direction, this.cameraRoll);
+      // 计算角色的上向量（基于characterRoot的旋转状态）
       const currentUp = new THREE.Vector3(0, 1, 0);
-      currentUp.applyMatrix4(rotationMatrix);
+      currentUp.applyQuaternion(this.characterRoot.quaternion);
       
-      // 计算右向量（相对于当前滚转状态）
+      // 计算右向量
       const right = new THREE.Vector3();
       right.crossVectors(currentUp, this.direction).normalize();
       
@@ -181,15 +238,8 @@ export class Player {
       this.body.applyForce(moveForce);
     }
     
-    // 同步相机位置和物理刚体
-    this.camera.position.copy(this.body.position);
-    
-    // 在同步位置后应用相机滚转（太空环境下持续保持）
-    this.camera.getWorldDirection(this.direction);
-    const rotationMatrix = new THREE.Matrix4();
-    rotationMatrix.makeRotationAxis(this.direction, this.cameraRoll);
-    this.camera.up.set(0, 1, 0);
-    this.camera.up.applyMatrix4(rotationMatrix);
+    // 同步角色根节点（重心）位置和物理刚体
+    this.characterRoot.position.copy(this.body.position);
     
     // 更新健康系统
     this.healthSystem.update(delta);
@@ -199,6 +249,25 @@ export class Player {
       // 禁用移动
       this.body.velocity.set(0, 0, 0);
     }
+  }
+  
+  // 获取角色重心的滚转角度（用于多人同步）
+  getRollAngle() {
+    // 计算characterRoot沿视线方向的旋转角度
+    const forward = new THREE.Vector3();
+    this.characterRoot.getWorldDirection(forward);
+    
+    const up = new THREE.Vector3(0, 1, 0);
+    up.applyQuaternion(this.characterRoot.quaternion);
+    
+    const right = new THREE.Vector3();
+    right.crossVectors(up, forward);
+    
+    // 计算滚转角度
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const angle = Math.atan2(right.dot(worldUp), up.dot(worldUp));
+    
+    return angle;
   }
   
   takeDamage(amount, attackerId) {
@@ -219,7 +288,10 @@ export class Player {
         Math.random() * 20 - 10
       );
       this.body.velocity.set(0, 0, 0);
-      this.cameraRoll = 0;
+      
+      // 重置角色根节点旋转
+      this.characterRoot.rotation.set(0, 0, 0);
+      this.characterRoot.quaternion.set(0, 0, 0, 1);
     }
     return success;
   }
