@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>太空FPS游戏</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #000;
+    }
+    
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #blocker {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    #instructions {
+      width: 100%;
+      max-width: 500px;
+      padding: 30px;
+      background-color: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      color: #fff;
+      text-align: center;
+      border-radius: 10px;
+    }
+    
+    #instructions h1 {
+      color: #00ff00;
+      margin-bottom: 20px;
+      font-size: 32px;
+    }
+    
+    #instructions p {
+      margin: 10px 0;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      display: none;
+      z-index: 100;
+    }
+    
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background-color: #00ff00;
+    }
+    
+    #crosshair::before {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      transform: translateY(-50%);
+    }
+    
+    #crosshair::after {
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      transform: translateX(-50%);
+    }
+
+    #ui {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #00ff00;
+      font-size: 18px;
+      font-family: monospace;
+      display: none;
+      z-index: 100;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    #ui div {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="blocker">
+    <div id="instructions">
+      <h1>太空FPS游戏</h1>
+      <p><strong>移动:</strong> W/A/S/D</p>
+      <p><strong>上升:</strong> Space</p>
+      <p><strong>下降:</strong> Shift</p>
+      <p><strong>视角:</strong> 鼠标移动</p>
+      <p><strong>射击:</strong> 鼠标左键</p>
+      <p style="margin-top: 20px; color: #00ff00; font-size: 18px;">
+        <strong>点击屏幕开始游戏</strong>
+      </p>
+    </div>
+  </div>
+  
+  <div id="canvas-container"></div>
+  <div id="crosshair"></div>
+  
+  <div id="ui">
+    <div id="ammo">弹药: 30/120</div>
+    <div id="fps">FPS: 60</div>
+  </div>
+  
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
+
