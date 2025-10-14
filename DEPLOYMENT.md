@@ -19,11 +19,18 @@ git init
 git add .
 git commit -m "初始提交"
 
-# 推送到GitHub
+# 推送到GitHub（替换为你的仓库地址）
 git remote add origin https://github.com/你的用户名/仓库名.git
 git branch -M main
 git push -u origin main
 ```
+
+**确保已提交的文件包括**：
+- `wrangler.toml` - Cloudflare配置文件
+- `package.json` - 依赖配置
+- `vite.config.js` - 构建配置
+- `src/` - 源代码
+- `index.html` - 入口页面
 
 ### 2. 部署到Cloudflare Pages
 
@@ -47,7 +54,12 @@ git push -u origin main
    框架预设: Vite
    构建命令: npm run build
    构建输出目录: dist
+   根目录: / (留空)
    ```
+   
+   **重要**：确保以下设置：
+   - ❌ **不要填写** "Deploy command"（部署命令留空）
+   - ✅ 只需要构建命令和输出目录
 
 5. **开始部署**
    - 点击 "Save and Deploy"
@@ -92,11 +104,21 @@ git push
 
 ### Q: 部署失败怎么办？
 
+**错误：Missing entry-point to Worker script**
+- 原因：错误配置了部署命令
+- 解决：
+  1. 进入项目 Settings > Builds & deployments
+  2. 确保 "Deploy command" 为空
+  3. 只保留：
+     - Build command: `npm run build`
+     - Build output directory: `dist`
+  4. 点击 "Save" 后重新部署
+
 **检查构建日志**：
 - 进入项目 > 点击失败的部署 > 查看构建日志
 - 常见问题：依赖安装失败，检查 `package.json`
 
-**解决方法**：
+**本地测试**：
 ```bash
 # 本地测试构建
 npm run build
