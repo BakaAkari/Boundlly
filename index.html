@@ -23,37 +23,107 @@
     }
     
     #blocker {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
+      display: none;
     }
     
     #instructions {
-      width: 100%;
-      max-width: 500px;
-      padding: 30px;
-      background-color: rgba(0, 0, 0, 0.9);
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 350px;
+      padding: 25px;
+      background-color: rgba(0, 0, 0, 0.95);
       border: 2px solid #00ff00;
       color: #fff;
-      text-align: center;
       border-radius: 10px;
+      z-index: 1000;
+      transition: transform 0.3s ease;
+    }
+
+    #instructions.collapsed {
+      transform: translateX(-320px);
     }
     
     #instructions h1 {
       color: #00ff00;
-      margin-bottom: 20px;
-      font-size: 32px;
+      margin-bottom: 10px;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    #player-id-section {
+      margin: 15px 0 20px 0;
+    }
+
+    #player-id-section label {
+      display: block;
+      color: #00ff00;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    #menu-player-id-input {
+      width: 100%;
+      padding: 10px;
+      background-color: rgba(0, 255, 0, 0.1);
+      border: 1px solid #00ff00;
+      color: #fff;
+      font-size: 14px;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+
+    #menu-player-id-input:focus {
+      outline: none;
+      background-color: rgba(0, 255, 0, 0.2);
     }
     
     #instructions p {
-      margin: 10px 0;
-      line-height: 1.6;
+      margin: 8px 0;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    #start-game-btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 15px;
+      background-color: #00ff00;
+      border: none;
+      color: #000;
       font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 5px;
+      transition: background-color 0.2s;
+    }
+
+    #start-game-btn:hover {
+      background-color: #00cc00;
+    }
+
+    #menu-toggle {
+      position: absolute;
+      top: 50%;
+      right: -40px;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 60px;
+      background-color: rgba(0, 0, 0, 0.95);
+      border: 2px solid #00ff00;
+      border-left: none;
+      border-radius: 0 10px 10px 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00ff00;
+      font-size: 20px;
+      transition: background-color 0.2s;
+    }
+
+    #menu-toggle:hover {
+      background-color: rgba(0, 255, 0, 0.2);
     }
     
     #crosshair {
@@ -183,18 +253,30 @@
   </style>
 </head>
 <body>
-  <div id="blocker">
-    <div id="instructions">
-      <h1>Boundlly</h1>
-      <p><strong>移动:</strong> W/A/S/D</p>
-      <p><strong>上升:</strong> Space</p>
-      <p><strong>下降:</strong> Shift</p>
-      <p><strong>视角:</strong> 鼠标移动</p>
-      <p><strong>射击:</strong> 鼠标左键</p>
-      <p style="margin-top: 20px; color: #00ff00; font-size: 18px;">
-        <strong>点击屏幕开始游戏</strong>
-      </p>
+  <div id="blocker"></div>
+
+  <div id="instructions">
+    <h1>Boundlly</h1>
+    
+    <div id="player-id-section">
+      <label for="menu-player-id-input">玩家ID</label>
+      <input type="text" id="menu-player-id-input" maxlength="16" placeholder="输入你的ID">
     </div>
+
+    <p><strong>移动:</strong> W/A/S/D</p>
+    <p><strong>上升:</strong> Space</p>
+    <p><strong>下降:</strong> C</p>
+    <p><strong>加速:</strong> Shift + W/A/D</p>
+    <p><strong>桶滚:</strong> Q / E</p>
+    <p><strong>视角:</strong> 鼠标移动</p>
+    <p><strong>射击:</strong> 按住鼠标左键</p>
+    <p><strong>换弹:</strong> R</p>
+    <p><strong>切换武器:</strong> 1/2/3 或滚轮</p>
+    <p><strong>设置:</strong> ESC</p>
+    
+    <button id="start-game-btn">开始游戏</button>
+    
+    <div id="menu-toggle">◀</div>
   </div>
   
   <div id="canvas-container"></div>
@@ -202,6 +284,7 @@
   
   <div id="ui">
     <div id="player-count">在线玩家: 1</div>
+    <div id="weapon-name">武器: 突击步枪</div>
     <div id="ammo">弹药: 30/120</div>
     <div id="fps">FPS: 60</div>
   </div>

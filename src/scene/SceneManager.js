@@ -9,6 +9,7 @@ export class SceneManager {
     this.createRenderer();
     this.createLights();
     this.createSkybox();
+    this.createPlayAreaBoundary();
     
     this.handleResize();
   }
@@ -77,11 +78,10 @@ export class SceneManager {
     const sunGeometry = new THREE.SphereGeometry(150, 32, 32);
     const sunMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xffdd44,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
     this.sun = new THREE.Mesh(sunGeometry, sunMaterial);
-    this.sun.renderOrder = -1000; // 背景渲染
+    this.sun.renderOrder = 999; // 最后渲染，但会被前景遮挡
     this.scene.add(this.sun);
     
     // 太阳光晕
@@ -91,17 +91,16 @@ export class SceneManager {
       transparent: true,
       opacity: 0.3,
       side: THREE.BackSide,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
     this.sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
-    this.sunGlow.renderOrder = -1001;
+    this.sunGlow.renderOrder = 998;
     this.scene.add(this.sunGlow);
   }
 
   createBackgroundEarth() {
     // 地球视觉对象（背景层）
-    const earthGeometry = new THREE.SphereGeometry(400, 64, 64);
+    const earthGeometry = new THREE.SphereGeometry(800, 64, 64);
     
     // 创建程序化地球纹理（模拟海洋和陆地）
     const canvas = document.createElement('canvas');
@@ -133,15 +132,14 @@ export class SceneManager {
     
     const earthMaterial = new THREE.MeshBasicMaterial({ 
       map: earthTexture,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
     this.earth = new THREE.Mesh(earthGeometry, earthMaterial);
-    this.earth.renderOrder = -900;
+    this.earth.renderOrder = 999;
     this.scene.add(this.earth);
 
     // 添加云层
-    const cloudGeometry = new THREE.SphereGeometry(404, 64, 64);
+    const cloudGeometry = new THREE.SphereGeometry(808, 64, 64);
     
     // 创建云层纹理
     const cloudCanvas = document.createElement('canvas');
@@ -170,25 +168,23 @@ export class SceneManager {
       map: cloudTexture,
       transparent: true,
       opacity: 0.4,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
     this.clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
-    this.clouds.renderOrder = -899;
+    this.clouds.renderOrder = 1000;
     this.scene.add(this.clouds);
 
     // 添加大气层效果
-    const atmosphereGeometry = new THREE.SphereGeometry(420, 64, 64);
+    const atmosphereGeometry = new THREE.SphereGeometry(840, 64, 64);
     const atmosphereMaterial = new THREE.MeshBasicMaterial({
       color: 0x6699ff,
       transparent: true,
       opacity: 0.15,
       side: THREE.BackSide,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
     this.atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    this.atmosphere.renderOrder = -898;
+    this.atmosphere.renderOrder = 1001;
     this.scene.add(this.atmosphere);
   }
 
@@ -201,8 +197,7 @@ export class SceneManager {
       transparent: true,
       opacity: 0.9,
       sizeAttenuation: false,
-      depthWrite: false,
-      depthTest: false
+      depthWrite: false
     });
 
     const starsVertices = [];
@@ -219,11 +214,53 @@ export class SceneManager {
     );
 
     this.stars = new THREE.Points(starsGeometry, starsMaterial);
-    this.stars.renderOrder = -1002;
+    this.stars.renderOrder = 997;
     this.scene.add(this.stars);
 
     // 添加深空背景色
     this.scene.background = new THREE.Color(0x000511);
+  }
+
+  createPlayAreaBoundary() {
+    // 创建游戏区域边界可视化（半透明球体）
+    const boundaryGeometry = new THREE.SphereGeometry(100, 32, 32);
+    const boundaryMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.05,
+      side: THREE.BackSide,
+      wireframe: false
+    });
+    this.boundaryMesh = new THREE.Mesh(boundaryGeometry, boundaryMaterial);
+    this.boundaryMesh.position.set(0, 0, 0);
+    this.scene.add(this.boundaryMesh);
+
+    // 添加线框边界（更明显）
+    const wireframeGeometry = new THREE.SphereGeometry(100, 16, 16);
+    const wireframeMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.15,
+      wireframe: true
+    });
+    const wireframeMesh = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+    wireframeMesh.position.set(0, 0, 0);
+    this.scene.add(wireframeMesh);
+
+    // 添加世界中心标记
+    const centerMarkerGeometry = new THREE.SphereGeometry(2, 16, 16);
+    const centerMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0.8
+    });
+    const centerMarker = new THREE.Mesh(centerMarkerGeometry, centerMarkerMaterial);
+    centerMarker.position.set(0, 0, 0);
+    this.scene.add(centerMarker);
+
+    // 添加坐标轴辅助线
+    const axesHelper = new THREE.AxesHelper(10);
+    this.scene.add(axesHelper);
   }
 
   handleResize() {
@@ -237,7 +274,7 @@ export class SceneManager {
   render() {
     // 更新背景对象位置（跟随相机，保持相对位置）
     const earthDirection = new THREE.Vector3(-0.6, -0.3, -0.6).normalize();
-    const earthDistance = 1200; // 背景距离
+    const earthDistance = 50000; // 背景距离（调整以适应更大的地球）
     
     if (this.earth) {
       this.earth.position.copy(this.camera.position)

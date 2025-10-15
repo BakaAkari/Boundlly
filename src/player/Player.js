@@ -23,6 +23,10 @@ export class Player {
     // 角色重心参数
     this.centerOffset = 0.45; // 重心在摄像机下方0.45米（45cm）
     
+    // 游戏区域边界
+    this.playAreaRadius = 100; // 可活动范围半径100米
+    this.spawnRadius = 50; // 重生范围半径50米
+    
     // 桶滚状态
     this.barrelRoll = {
       active: false,
@@ -40,7 +44,10 @@ export class Player {
   createCharacterRoot() {
     // 创建角色根节点（重心/胶囊体中心）
     this.characterRoot = new THREE.Group();
-    this.characterRoot.position.set(0, 0, 10);
+    
+    // 在重生区域内随机生成初始位置
+    const spawnPos = this.getRandomSpawnPosition();
+    this.characterRoot.position.copy(spawnPos);
     this.scene.add(this.characterRoot);
     
     // 摄像机作为子对象，相对于重心向上偏移
@@ -49,6 +56,19 @@ export class Player {
     
     // 创建玩家ID标签
     this.createPlayerLabel();
+  }
+
+  getRandomSpawnPosition() {
+    // 在球体内随机生成位置
+    const radius = Math.random() * this.spawnRadius;
+    const theta = Math.random() * Math.PI * 2; // 水平角度
+    const phi = Math.acos(2 * Math.random() - 1); // 垂直角度（均匀分布）
+    
+    return new THREE.Vector3(
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.sin(phi) * Math.sin(theta),
+      radius * Math.cos(phi)
+    );
   }
 
   createPlayerLabel() {
@@ -69,7 +89,7 @@ export class Player {
     const spriteMaterial = new THREE.SpriteMaterial({
       map: this.labelTexture,
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false
     });
     
@@ -77,6 +97,7 @@ export class Player {
     this.labelSprite = new THREE.Sprite(spriteMaterial);
     this.labelSprite.scale.set(2, 0.5, 1);
     this.labelSprite.position.set(0, this.centerOffset + 1.2, 0); // 头顶上方1.2米
+    this.labelSprite.renderOrder = 0; // 正常渲染层
     
     // 添加到角色根节点
     this.characterRoot.add(this.labelSprite);
@@ -134,8 +155,9 @@ export class Player {
       angularDamping: 0.9
     });
     
-    // 物理刚体位置对应角色重心
-    this.body.position.set(0, 0, 10);
+    // 物理刚体位置对应角色重心，使用初始重生位置
+    const spawnPos = this.characterRoot.position;
+    this.body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
     this.physicsWorld.world.addBody(this.body);
   }
 
@@ -155,13 +177,13 @@ export class Player {
     
     // 桶滚旋转（直接旋转characterRoot）
     if (this.barrelRoll.active) {
-      // 获取角色前进方向（世界坐标）
+      // 获取相机当前面向方向（世界坐标）
       const forward = new THREE.Vector3();
-      this.characterRoot.getWorldDirection(forward);
+      this.camera.getWorldDirection(forward);
       
-      // 沿着前进方向旋转
+      // 沿着相机面向方向旋转（世界坐标系）
       const rotationDelta = this.barrelRoll.direction * this.barrelRoll.rotationSpeed * delta;
-      this.characterRoot.rotateOnAxis(forward, rotationDelta);
+      this.characterRoot.rotateOnWorldAxis(forward, rotationDelta);
     }
     
     // 常规移动
@@ -241,6 +263,9 @@ export class Player {
     // 同步角色根节点（重心）位置和物理刚体
     this.characterRoot.position.copy(this.body.position);
     
+    // 边界检测（限制在活动区域内）
+    this.checkBoundary();
+    
     // 更新健康系统
     this.healthSystem.update(delta);
     
@@ -248,6 +273,32 @@ export class Player {
     if (this.healthSystem.isDead) {
       // 禁用移动
       this.body.velocity.set(0, 0, 0);
+    }
+  }
+
+  checkBoundary() {
+    // 计算距离世界中心的距离
+    const distanceFromCenter = this.characterRoot.position.length();
+    
+    // 如果超出边界，推回边界内
+    if (distanceFromCenter > this.playAreaRadius) {
+      // 计算推回方向（指向世界中心）
+      const pushDirection = this.characterRoot.position.clone().normalize().multiplyScalar(-1);
+      
+      // 将位置限制在边界上
+      this.characterRoot.position.normalize().multiplyScalar(this.playAreaRadius);
+      this.body.position.copy(this.characterRoot.position);
+      
+      // 减少速度（模拟碰撞边界）
+      this.body.velocity.multiplyScalar(0.5);
+      
+      // 施加轻微推力朝向中心
+      const pushForce = new CANNON.Vec3(
+        pushDirection.x * 10,
+        pushDirection.y * 10,
+        pushDirection.z * 10
+      );
+      this.body.applyForce(pushForce);
     }
   }
   
@@ -281,17 +332,17 @@ export class Player {
   respawn() {
     const success = this.healthSystem.respawn();
     if (success) {
-      // 重置位置
-      this.body.position.set(
-        Math.random() * 20 - 10,
-        Math.random() * 20 - 10,
-        Math.random() * 20 - 10
-      );
+      // 在重生区域内随机生成位置
+      const spawnPos = this.getRandomSpawnPosition();
+      this.body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
       this.body.velocity.set(0, 0, 0);
       
       // 重置角色根节点旋转
       this.characterRoot.rotation.set(0, 0, 0);
       this.characterRoot.quaternion.set(0, 0, 0, 1);
+      
+      // 同步位置
+      this.characterRoot.position.copy(this.body.position);
     }
     return success;
   }

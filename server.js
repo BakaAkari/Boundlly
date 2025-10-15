@@ -31,10 +31,20 @@ const players = new Map();
 io.on('connection', (socket) => {
   console.log(`玩家连接: ${socket.id}`);
   
+  // 生成随机重生位置（半径50米球体内）
+  const spawnRadius = 50;
+  const radius = Math.random() * spawnRadius;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  
+  const spawnX = radius * Math.sin(phi) * Math.cos(theta);
+  const spawnY = radius * Math.sin(phi) * Math.sin(theta);
+  const spawnZ = radius * Math.cos(phi);
+  
   // 新玩家加入
   const newPlayer = {
     id: socket.id,
-    position: { x: 0, y: 0, z: 10 },
+    position: { x: spawnX, y: spawnY, z: spawnZ },
     rotation: { x: 0, y: 0, z: 0 },
     cameraRoll: 0,
     playerId: '玩家'

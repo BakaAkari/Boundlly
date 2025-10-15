@@ -287,9 +287,10 @@ export class MultiplayerManager {
     
     // 每秒发送20次位置更新
     if (!this.lastUpdate || Date.now() - this.lastUpdate > 50) {
-      if (this.localPlayer && this.localPlayer.camera) {
+      if (this.localPlayer && this.localPlayer.characterRoot) {
+        // 发送角色重心的世界位置（而不是相机的局部位置）
         this.sendPlayerUpdate(
-          this.localPlayer.camera.position,
+          this.localPlayer.characterRoot.position,
           this.localPlayer.camera.rotation,
           this.localPlayer.getRollAngle ? this.localPlayer.getRollAngle() : 0
         );
@@ -313,7 +314,7 @@ export class MultiplayerManager {
     const spriteMaterial = new THREE.SpriteMaterial({
       map: labelTexture,
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false
     });
     
@@ -321,6 +322,7 @@ export class MultiplayerManager {
     const labelSprite = new THREE.Sprite(spriteMaterial);
     labelSprite.scale.set(2, 0.5, 1);
     labelSprite.position.set(0, 2, 0); // 头顶上方
+    labelSprite.renderOrder = 0; // 正常渲染层
     labelSprite.userData.labelTexture = labelTexture;
     labelSprite.userData.playerId = playerId;
     

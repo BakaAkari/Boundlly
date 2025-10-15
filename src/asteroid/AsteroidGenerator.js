@@ -49,10 +49,11 @@ export class AsteroidGenerator {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       
-      // 随机位置（在球形区域内，但避开中心）
+      // 随机位置（在球形区域内，避开中心20米）
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const distance = radius * 0.5 + Math.random() * radius * 0.5;
+      const minDistance = 20; // 避开中心区域
+      const distance = minDistance + Math.random() * (radius - minDistance);
       
       mesh.position.x = distance * Math.sin(phi) * Math.cos(theta);
       mesh.position.y = distance * Math.sin(phi) * Math.sin(theta);
@@ -101,6 +102,21 @@ export class AsteroidGenerator {
     for (let asteroid of this.asteroids) {
       asteroid.mesh.position.copy(asteroid.body.position);
       asteroid.mesh.quaternion.copy(asteroid.body.quaternion);
+      
+      // 边界检测 - 如果小行星超出100米范围，施加向心力
+      const distanceFromCenter = asteroid.body.position.length();
+      if (distanceFromCenter > 100) {
+        // 计算指向中心的力
+        const pullForce = new CANNON.Vec3(
+          -asteroid.body.position.x * 0.5,
+          -asteroid.body.position.y * 0.5,
+          -asteroid.body.position.z * 0.5
+        );
+        asteroid.body.applyForce(pullForce);
+        
+        // 减少速度
+        asteroid.body.velocity.scale(0.95, asteroid.body.velocity);
+      }
     }
   }
 

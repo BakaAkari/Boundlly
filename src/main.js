@@ -4,8 +4,9 @@ import { Player } from './player/Player.js';
 import { InputManager } from './player/InputManager.js';
 import { AsteroidGenerator } from './asteroid/AsteroidGenerator.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
-import { Gun } from './weapon/Gun.js';
+import { WeaponSystem } from './weapon/WeaponSystem.js';
 import { MultiplayerManager } from './multiplayer/MultiplayerManager.js';
+import { LevelLoader } from './scene/LevelLoader.js';
 
 class Game {
   constructor() {
@@ -21,12 +22,28 @@ class Game {
     this.init();
   }
 
-  init() {
+  async init() {
     // 创建场景管理器
     this.sceneManager = new SceneManager(this.container);
     
     // 创建物理世界
     this.physicsWorld = new PhysicsWorld();
+    
+    // 创建关卡加载器并加载关卡
+    this.levelLoader = new LevelLoader(
+      this.sceneManager.scene, 
+      this.physicsWorld,
+      {
+        useSimplifiedCollision: false // false=精确网格碰撞, true=简化包围盒碰撞
+      }
+    );
+    
+    try {
+      await this.levelLoader.loadLevel('/models/Env.glb');
+      console.log('关卡环境加载完成');
+    } catch (error) {
+      console.warn('关卡加载失败，继续使用默认场景', error);
+    }
     
     // 创建输入管理器
     this.inputManager = new InputManager();
@@ -39,15 +56,15 @@ class Game {
       this.sceneManager.scene
     );
     
-    // 创建碎石
+    // 创建碎石（在游戏区域100米内生成）
     this.asteroidGenerator = new AsteroidGenerator(
       this.sceneManager.scene,
       this.physicsWorld
     );
-    this.asteroidGenerator.generate(50, 200);
+    this.asteroidGenerator.generate(50, 100);
     
-    // 创建武器
-    this.gun = new Gun(this.sceneManager.camera, this.sceneManager.scene);
+    // 创建武器系统
+    this.weaponSystem = new WeaponSystem(this.sceneManager.camera, this.sceneManager.scene);
     
     // 创建多人游戏管理器
     this.multiplayerManager = new MultiplayerManager(
@@ -73,13 +90,37 @@ class Game {
   }
 
   setupPointerLock() {
-    this.instructions.addEventListener('click', () => {
+    // 开始游戏按钮
+    const startButton = document.getElementById('start-game-btn');
+    const menuPlayerIdInput = document.getElementById('menu-player-id-input');
+    
+    // 加载已保存的ID
+    menuPlayerIdInput.value = localStorage.getItem('playerID') || '';
+    
+    startButton.addEventListener('click', () => {
+      // 保存玩家ID
+      const playerId = menuPlayerIdInput.value.trim() || '玩家';
+      this.player.updatePlayerLabel(playerId);
+      
+      // 通知服务器
+      if (this.multiplayerManager) {
+        this.multiplayerManager.updatePlayerId(playerId);
+      }
+      
+      // 锁定鼠标
       this.player.controls.lock();
     });
 
+    // 菜单收起/展开
+    const menuToggle = document.getElementById('menu-toggle');
+    menuToggle.addEventListener('click', () => {
+      this.instructions.classList.toggle('collapsed');
+      menuToggle.textContent = this.instructions.classList.contains('collapsed') ? '▶' : '◀';
+    });
+
     this.player.controls.addEventListener('lock', () => {
-      this.instructions.style.display = 'none';
-      this.blocker.style.display = 'none';
+      this.instructions.classList.add('collapsed');
+      menuToggle.textContent = '▶';
       this.crosshair.style.display = 'block';
       this.ui.style.display = 'block';
       document.getElementById('settings-hint').style.display = 'block';
@@ -90,11 +131,11 @@ class Game {
       // 检查是否是因为打开设置菜单而解锁
       const settingsMenu = document.getElementById('settings-menu');
       if (settingsMenu.style.display === 'block') {
-        return; // 如果是设置菜单，不显示blocker
+        return; // 如果是设置菜单，不显示菜单
       }
       
-      this.blocker.style.display = 'flex';
-      this.instructions.style.display = 'block';
+      this.instructions.classList.remove('collapsed');
+      menuToggle.textContent = '◀';
       this.crosshair.style.display = 'none';
       this.ui.style.display = 'none';
       document.getElementById('settings-hint').style.display = 'none';
@@ -149,26 +190,50 @@ class Game {
   }
 
   setupShooting() {
-    document.addEventListener('click', () => {
-      if (this.isPlaying && this.player.healthSystem.isAlive()) {
-        // 获取其他玩家列表
-        const otherPlayers = this.multiplayerManager.getOtherPlayersList();
-        
-        // 射击
-        const hitResult = this.gun.shoot(this.asteroidGenerator.asteroids, otherPlayers);
-        
-        // 通知其他玩家射击
-        const direction = new THREE.Vector3();
-        this.sceneManager.camera.getWorldDirection(direction);
-        this.multiplayerManager.sendPlayerShoot(
-          this.sceneManager.camera.position,
-          direction
-        );
-        
-        // 如果击中了玩家，发送伤害事件
-        if (hitResult && hitResult.type === 'player') {
-          this.multiplayerManager.sendPlayerDamage(hitResult.playerId, hitResult.damage);
-        }
+    // 鼠标按下 - 开始射击
+    document.addEventListener('mousedown', (event) => {
+      if (event.button === 0 && this.isPlaying && this.player.healthSystem.isAlive()) {
+        this.weaponSystem.startShooting();
+      }
+    });
+
+    // 鼠标抬起 - 停止射击
+    document.addEventListener('mouseup', (event) => {
+      if (event.button === 0) {
+        this.weaponSystem.stopShooting();
+      }
+    });
+
+    // 按键处理
+    document.addEventListener('keydown', (event) => {
+      if (!this.isPlaying || !this.player.healthSystem.isAlive()) return;
+      
+      // R键换弹
+      if (event.code === 'KeyR') {
+        this.weaponSystem.reload();
+      }
+      
+      // 1/2/3键切换武器
+      if (event.code === 'Digit1') {
+        this.weaponSystem.switchWeapon(0);
+      } else if (event.code === 'Digit2') {
+        this.weaponSystem.switchWeapon(1);
+      } else if (event.code === 'Digit3') {
+        this.weaponSystem.switchWeapon(2);
+      }
+      
+      // 鼠标滚轮切换（备选）
+    });
+
+    // 鼠标滚轮切换武器
+    document.addEventListener('wheel', (event) => {
+      if (!this.isPlaying) return;
+      
+      event.preventDefault();
+      if (event.deltaY > 0) {
+        this.weaponSystem.nextWeapon();
+      } else {
+        this.weaponSystem.previousWeapon();
       }
     });
   }
@@ -200,8 +265,36 @@ class Game {
       // 更新碎石
       this.asteroidGenerator.update(delta);
       
-      // 更新武器
-      this.gun.update(delta, time);
+      // 更新武器系统
+      this.weaponSystem.update(delta, time);
+      
+      // 处理连发射击
+      if (this.weaponSystem.mouseDown && this.player.healthSystem.isAlive()) {
+        const currentWeapon = this.weaponSystem.getCurrentWeapon();
+        const lastFireTimeBefore = currentWeapon.lastFireTime;
+        
+        const otherPlayers = this.multiplayerManager.getOtherPlayersList();
+        const hitResult = this.weaponSystem.shoot(this.asteroidGenerator.asteroids, otherPlayers);
+        
+        // 检查是否真的射击了（lastFireTime有更新）
+        if (currentWeapon.lastFireTime > lastFireTimeBefore) {
+          const direction = new THREE.Vector3();
+          this.sceneManager.camera.getWorldDirection(direction);
+          
+          const worldPosition = new THREE.Vector3();
+          this.sceneManager.camera.getWorldPosition(worldPosition);
+          
+          this.multiplayerManager.sendPlayerShoot(worldPosition, direction);
+          
+          // 如果击中玩家
+          if (hitResult && hitResult.type === 'player') {
+            this.multiplayerManager.sendPlayerDamage(hitResult.playerId, hitResult.damage);
+          }
+        }
+      }
+      
+      // 更新武器UI
+      this.weaponSystem.updateWeaponUI();
       
       // 更新多人游戏
       this.multiplayerManager.update(delta);
