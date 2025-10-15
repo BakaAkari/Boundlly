@@ -97,20 +97,23 @@ export class HealthSystem {
       color: white;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     `;
-    respawnText.textContent = '点击屏幕重生';
+    respawnText.textContent = '按空格重生';
     
     deathScreen.appendChild(deathText);
     deathScreen.appendChild(respawnText);
     document.body.appendChild(deathScreen);
     
-    // 点击重生
-    deathScreen.addEventListener('click', () => {
-      if (this.onRespawnCallback) {
-        this.onRespawnCallback();
-      } else {
-        this.respawn();
+    // 空格键重生
+    this.respawnKeyHandler = (event) => {
+      if (event.code === 'Space' && this.isDead) {
+        if (this.onRespawnCallback) {
+          this.onRespawnCallback();
+        } else {
+          this.respawn();
+        }
       }
-    });
+    };
+    document.addEventListener('keydown', this.respawnKeyHandler);
   }
 
   takeDamage(amount) {
@@ -243,6 +246,13 @@ export class HealthSystem {
 
   isAlive() {
     return !this.isDead;
+  }
+
+  destroy() {
+    // 清理事件监听器
+    if (this.respawnKeyHandler) {
+      document.removeEventListener('keydown', this.respawnKeyHandler);
+    }
   }
 }
 

@@ -15,7 +15,7 @@ export class AssaultRifle extends BaseWeapon {
         bodySize: { x: 0.1, y: 0.1, z: 0.4 },
         color: 0x333333,
         useExternalModel: false, // 设为true启用外部模型
-        modelPath: '/models/assault_rifle.glb' // 模型路径
+        modelPath: '/models/weapons/rifle.glb' // 模型路径
       }
     });
     
@@ -25,20 +25,20 @@ export class AssaultRifle extends BaseWeapon {
     }
   }
 
-  loadExternalModel() {
-    const loader = new GLTFLoader();
-    
-    loader.load(
-      this.modelConfig.modelPath,
-      (gltf) => {
+  async loadExternalModel() {
+    try {
+      // 使用游戏实例的loadModel方法
+      const game = window.gameInstance; // 需要从全局访问游戏实例
+      if (game && game.loadModel) {
+        const model = await game.loadModel(this.modelConfig.modelPath, 'WEAPON');
+        
         // 移除默认模型
         this.gunGroup.clear();
         
         // 添加加载的模型
-        const model = gltf.scene;
-        model.scale.set(0.1, 0.1, 0.1); // 调整缩放
+        model.scale.set(0.1, 0.1, 0.1);
         model.position.set(0, 0, 0);
-        model.rotation.set(0, Math.PI, 0); // 调整朝向
+        model.rotation.set(0, Math.PI, 0);
         
         this.gunGroup.add(model);
         
@@ -47,14 +47,12 @@ export class AssaultRifle extends BaseWeapon {
         this.gunGroup.add(this.muzzleLight);
         
         console.log('突击步枪模型加载成功');
-      },
-      (progress) => {
-        console.log(`加载进度: ${(progress.loaded / progress.total * 100).toFixed(2)}%`);
-      },
-      (error) => {
-        console.error('模型加载失败，使用默认模型', error);
+      } else {
+        console.warn('无法访问游戏实例，使用默认模型');
       }
-    );
+    } catch (error) {
+      console.error('突击步枪模型加载失败，使用默认模型:', error);
+    }
   }
 }
 

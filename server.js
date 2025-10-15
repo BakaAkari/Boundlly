@@ -11,13 +11,33 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: ["https://webgame.baka-akari.zone:18443"], // 限制允许的域名
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  // 添加连接限制
+  maxHttpBufferSize: 1e6, // 限制消息大小
+  pingTimeout: 60000,     // 连接超时
+  pingInterval: 25000     // 心跳间隔
 });
+
+// 安全中间件
+app.use((req, res, next) => {
+  // 添加安全头
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// 限制请求体大小
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
 // 提供静态文件
 app.use(express.static(join(__dirname, 'dist')));
+app.use('/models', express.static(join(__dirname, 'public/models')));
 
 // 所有路由返回index.html
 app.get('*', (req, res) => {
@@ -27,8 +47,20 @@ app.get('*', (req, res) => {
 // 存储所有在线玩家
 const players = new Map();
 
+// 连接限制
+const MAX_PLAYERS = 50; // 最大玩家数
+const PLAYER_NAME_LIMIT = 20; // 玩家名长度限制
+
 // Socket.io连接处理
 io.on('connection', (socket) => {
+  // 检查玩家数量限制
+  if (players.size >= MAX_PLAYERS) {
+    console.log(`连接被拒绝: 服务器已满 (${players.size}/${MAX_PLAYERS})`);
+    socket.emit('server_full');
+    socket.disconnect(true);
+    return;
+  }
+  
   console.log(`玩家连接: ${socket.id}`);
   
   // 生成随机重生位置（半径50米球体内）

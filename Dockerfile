@@ -19,6 +19,7 @@ RUN npm install --only=production
 
 # 复制构建好的静态文件和服务器
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 COPY server.js ./
 
 # 暴露端口

@@ -45,18 +45,18 @@ export class MultiplayerManager {
     // 接收当前所有玩家
     this.socket.on('currentPlayers', (players) => {
       console.log('当前玩家:', players.length);
-      players.forEach(player => {
+      players.forEach(async (player) => {
         if (player.id !== this.socket.id) {
-          this.addOtherPlayer(player);
+          await this.addOtherPlayer(player);
         }
       });
       this.updatePlayerCount();
     });
 
     // 新玩家加入
-    this.socket.on('newPlayer', (player) => {
+    this.socket.on('newPlayer', async (player) => {
       console.log('新玩家加入:', player.id);
-      this.addOtherPlayer(player);
+      await this.addOtherPlayer(player);
       this.updatePlayerCount();
     });
 
@@ -106,7 +106,7 @@ export class MultiplayerManager {
     });
   }
 
-  addOtherPlayer(playerData) {
+  async addOtherPlayer(playerData) {
     if (this.otherPlayers.has(playerData.id)) {
       return;
     }
@@ -160,8 +160,33 @@ export class MultiplayerManager {
     
     this.scene.add(group);
     
+    // 为其他玩家创建物理体（用于碰撞检测）
+    let physicsBody = null;
+    if (this.localPlayer && this.localPlayer.physicsWorld) {
+      const { CANNON } = await import('cannon-es');
+      const shape = new CANNON.Sphere(1); // 与本地玩家相同的球形碰撞体
+      physicsBody = new CANNON.Body({
+        mass: 5, // 与本地玩家相同的质量
+        shape: shape,
+        material: this.localPlayer.physicsWorld.playerMaterial, // 使用相同的玩家材质
+        type: CANNON.Body.KINEMATIC // 运动学刚体，不受物理力影响但参与碰撞
+      });
+      
+      // 设置初始位置
+      if (playerData.position) {
+        physicsBody.position.set(
+          playerData.position.x,
+          playerData.position.y,
+          playerData.position.z
+        );
+      }
+      
+      this.localPlayer.physicsWorld.world.addBody(physicsBody);
+    }
+    
     this.otherPlayers.set(playerData.id, {
       group: group,
+      physicsBody: physicsBody,
       targetPosition: new THREE.Vector3(),
       targetRotation: new THREE.Euler(),
       targetRoll: 0
@@ -179,6 +204,15 @@ export class MultiplayerManager {
       if (data.cameraRoll !== undefined) {
         player.targetRoll = data.cameraRoll;
       }
+      
+      // 同步更新物理体位置
+      if (player.physicsBody) {
+        player.physicsBody.position.set(
+          data.position.x,
+          data.position.y,
+          data.position.z
+        );
+      }
     }
   }
 
@@ -186,6 +220,12 @@ export class MultiplayerManager {
     const player = this.otherPlayers.get(playerId);
     if (player) {
       this.scene.remove(player.group);
+      
+      // 移除物理体
+      if (player.physicsBody && this.localPlayer && this.localPlayer.physicsWorld) {
+        this.localPlayer.physicsWorld.world.removeBody(player.physicsBody);
+      }
+      
       this.otherPlayers.delete(playerId);
     }
   }

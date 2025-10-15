@@ -150,7 +150,7 @@ export class Player {
     this.body = new CANNON.Body({
       mass: 5,
       shape: shape,
-      material: new CANNON.Material({ friction: 0.1, restitution: 0.3 }),
+      material: this.physicsWorld.playerMaterial, // 使用玩家专用材质
       linearDamping: 0.9,
       angularDamping: 0.9
     });
@@ -159,6 +159,8 @@ export class Player {
     const spawnPos = this.characterRoot.position;
     this.body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
     this.physicsWorld.world.addBody(this.body);
+    
+    console.log('✓ 玩家物理体已创建，使用玩家材质');
   }
 
   update(delta) {

@@ -73,7 +73,7 @@ export class AsteroidGenerator {
       const body = new CANNON.Body({
         mass: size * size * size,
         shape: shape,
-        material: new CANNON.Material({ friction: 0.5, restitution: 0.3 })
+        material: this.physicsWorld.asteroidMaterial // 使用小行星专用材质
       });
       
       body.position.copy(mesh.position);
